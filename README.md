@@ -4,6 +4,8 @@
 
 This is a Retrieval-Augmented Generation (RAG) chatbot that leverages FAISS for efficient document retrieval and a language model for generating responses. It is built using Flask for the backend and integrates a lightweight embedding model for document indexing and retrieval.
 
+![SS](images/Screenshot%202025-01-31%20085824.png)
+
 ## Features
 
 - Document-based retrieval using FAISS

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RAG Chatbot</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        line-height: 1.6;
+        padding: 2rem;
+        background-color: #f5f5f5;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      h1 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 2rem;
+      }
+
+      .input-group {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+      }
+
+      input {
+        flex: 1;
+        padding: 0.75rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 1rem;
+      }
+
+      button {
+        padding: 0.75rem 1.5rem;
+        background-color: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: background-color 0.2s;
+      }
+
+      button:hover {
+        background-color: #1d4ed8;
+      }
+
+      button:disabled {
+        background-color: #93c5fd;
+        cursor: not-allowed;
+      }
+
+      .process-steps {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+        padding: 1rem 0;
+        border-top: 2px solid #e0e0e0;
+        border-bottom: 2px solid #e0e0e0;
+      }
+
+      .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 1;
+        position: relative;
+      }
+
+      .step:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        top: 25%;
+        height: 50%;
+        width: 2px;
+        background-color: #e0e0e0;
+      }
+
+      .step-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 0.5rem;
+      }
+
+      .step.active .step-icon {
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.1);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      .step:nth-child(1) .step-icon {
+        background-color: #93c5fd;
+      }
+      .step:nth-child(2) .step-icon {
+        background-color: #86efac;
+      }
+      .step:nth-child(3) .step-icon {
+        background-color: #c4b5fd;
+      }
+
+      .step-label {
+        font-size: 0.875rem;
+        color: #666;
+      }
+
+      .response {
+        margin-top: 2rem;
+        display: none;
+      }
+
+      .response.visible {
+        display: block;
+      }
+
+      .answer,
+      .context {
+        background-color: #f8fafc;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+      }
+
+      .context-list {
+        list-style: none;
+      }
+
+      .context-item {
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background-color: #f8fafc;
+        border-radius: 8px;
+      }
+
+      .loading {
+        display: inline-block;
+        animation: spin 1s infinite linear;
+      }
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>UAV-RAG Chatbot</h1>
+
+      <div class="input-group">
+        <input
+          type="text"
+          id="question"
+          placeholder="Enter your question..."
+          autocomplete="off"
+        />
+        <button id="askButton" onclick="askQuestion()">Ask</button>
+      </div>
+
+      <div class="process-steps">
+        <div class="step" id="step1">
+          <div class="step-icon">🔍</div>
+          <div class="step-label">Query Processing</div>
+        </div>
+        <div class="step" id="step2">
+          <div class="step-icon">💾</div>
+          <div class="step-label">Context Retrieval</div>
+        </div>
+        <div class="step" id="step3">
+          <div class="step-icon">⚡</div>
+          <div class="step-label">Answer Generation</div>
+        </div>
+      </div>
+
+      <div id="response" class="response">
+        <div class="answer">
+          <h3>Answer:</h3>
+          <p id="answerText"></p>
+        </div>
+        <div class="context">
+          <h3>Source Contexts:</h3>
+          <ul id="contextList" class="context-list"></ul>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentStep = 0;
+      const steps = document.querySelectorAll(".step");
+
+      async function askQuestion() {
+        const question = document.getElementById("question").value.trim();
+        if (!question) {
+          alert("Please enter a question.");
+          return;
+        }
+
+        const button = document.getElementById("askButton");
+        const response = document.getElementById("response");
+
+        // Reset and start loading state
+        button.disabled = true;
+        response.classList.remove("visible");
+        currentStep = 0;
+
+        // Simulate RAG process steps
+        for (let i = 0; i < steps.length; i++) {
+          updateActiveStep(i);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+
+        try {
+          const res = await fetch("/ask", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question }),
+          });
+
+          const data = await res.json();
+          displayResponse(data);
+        } catch (error) {
+          displayError("Failed to get response");
+        } finally {
+          button.disabled = false;
+          resetSteps();
+        }
+      }
+
+      function updateActiveStep(step) {
+        steps.forEach((s, index) => {
+          s.classList.remove("active");
+          if (index === step) s.classList.add("active");
+        });
+      }
+
+      function resetSteps() {
+        steps.forEach((step) => step.classList.remove("active"));
+      }
+
+      function displayResponse(data) {
+        const response = document.getElementById("response");
+        const answerText = document.getElementById("answerText");
+        const contextList = document.getElementById("contextList");
+
+        if (data.error) {
+          answerText.textContent = data.error;
+          contextList.innerHTML = "";
+        } else {
+          answerText.textContent = data.answer;
+          contextList.innerHTML = data.contexts
+            .map(
+              (ctx, index) => `
+                        <li class="context-item">
+                            <strong>Context ${index + 1}:</strong>
+                            <p>${ctx}</p>
+                        </li>
+                    `
+            )
+            .join("");
+        }
+
+        response.classList.add("visible");
+      }
+
+      function displayError(message) {
+        const response = document.getElementById("response");
+        const answerText = document.getElementById("answerText");
+
+        answerText.textContent = message;
+        document.getElementById("contextList").innerHTML = "";
+        response.classList.add("visible");
+      }
+
+      // Enable form submission with Enter key
+      document
+        .getElementById("question")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") {
+            askQuestion();
+          }
+        });
+    </script>
+  </body>
+</html>
